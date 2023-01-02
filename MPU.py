@@ -1,3 +1,6 @@
+# Reading and evaluating values in the time domain 
+# from the MPU-6050 with a moving average and a threshold
+ 
 from mpu6050 import mpu6050
 import time
 import numpy as np
@@ -8,6 +11,7 @@ sen2 = mpu6050(0x69)
 threshold = 0.40
 detection = False
 hysteresis = 10
+window_size = 5
 
 print("MPU 1 Range: " + str(sen1.read_accel_range()))
 print("MPU 2 Range: " + str(sen2.read_accel_range()))
@@ -15,8 +19,8 @@ print("MPU 2 Range: " + str(sen2.read_accel_range()))
 accl_dat1 = sen1.get_accel_data()
 accl_dat2 = sen2.get_accel_data()
 
-sen1_arr = np.empty(5, dtype='float32')
-sen2_arr = np.empty(5, dtype='float32')
+sen1_arr = np.empty(window_size, dtype='float32')
+sen2_arr = np.empty(window_size, dtype='float32')
 cnt = 0
 
 while True:
@@ -52,5 +56,5 @@ while True:
             detection = False 
 
     cnt += 1
-    if cnt > 4:
+    if cnt > (window_size - 1):
         cnt = 0    
