@@ -14,7 +14,6 @@ CHANNELS = 1
 RATE = 44100
 CHUNK = 1024 # 1024bytes of data red from a buffer
 RECORD_SECONDS = 0.1
-WAVE_OUTPUT_FILENAME = "file.wav"
 
 i=0
 f,ax = plt.subplots(2)
