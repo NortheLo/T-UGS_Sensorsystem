@@ -6,9 +6,6 @@ from scipy.io import wavfile
 import time
 import sys
 
-# Probably obsolete
-import seaborn as sns
-
 FORMAT = pyaudio.paInt16 # We use 16bit format per sample
 CHANNELS = 1
 RATE = 44100
@@ -50,9 +47,9 @@ def selectMic():
 
 def plot_data(in_data):
     # get and convert the data to float
-    audio_data = np.fromstring(in_data, np.int16)
+    audio_data = np.frombuffer(in_data, np.int16)
     # Fast Fourier Transform, 10*log10(abs) is to scale it to dB
-    # and make sure it's not imaginary
+    # and make sure it's not imaginaryi
     dfft = 10.*np.log10(abs(np.fft.rfft(audio_data)))
     print("--- %s seconds ----" % (time.time()- time_t1)) # latency for recording
     
@@ -61,7 +58,7 @@ def plot_data(in_data):
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
 
-    # Show the updated plot, but without blocking
+    # Show the updated plot, but without blocking 
     plt.pause(0.01)
     if keep_going:
         return True

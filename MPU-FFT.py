@@ -93,16 +93,15 @@ def sensor_loop():
            + " | " + str(gyro1_z[cnt]) 
            + "|")
         
-
-        time.sleep(0.5)
         cnt += 1
         if cnt >= (WINDOW * SAMPLE_RATE):
             cnt = 0
-            sen1_fft = np.abs(np.fft.fft(accl_vec))
-            #sen2_fft = np.abs(np.fft.fft(sen2_y))   
-            #plt.plot(t, sen1_fft)
-            #plt.draw()
-            #plt.pause(0.01)
+            sen1_fft = np.abs(np.fft.fft(accl1_z))
+            #sen2_fft = np.abs(np.fft.fft(gyro1_y))   
+            plt.plot(t, sen1_fft)
+            #plt.plot(t, sen2_fft)
+            plt.draw()
+            plt.pause(0.01)
             print("New FFT Plot")
 
 def main():
