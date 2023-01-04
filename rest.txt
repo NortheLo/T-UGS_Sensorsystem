@@ -1,0 +1,12 @@
+    dfft = 10.*np.log10(abs(np.fft.rfft(audio_data)))
+
+    sos = signal.butter(10, 300, 'low', fs=SAMPLERATE, output='sos')
+    filtered = signal.sosfilt(sos, audio_data)
+    dfft_filtered = 10.*np.log10(abs(np.fft.rfft(filtered)))
+
+    print("--- %s seconds ----" % (time.time()- time_t1)) # latency for recording
+    
+    li.set_xdata(np.arange(len(audio_data)))
+    li.set_ydata(audio_data)
+    li2.set_xdata(np.arange(len(dfft))*10.)
+    li2.set_ydata(dfft_filtered)
