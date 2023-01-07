@@ -7,30 +7,37 @@ import time
 import sys
 from scipy import signal
 from scipy.fft import fftshift
+import scipy.fftpack
 
 FORMAT = pyaudio.paInt16 # We use 16bit format per sample
 CHANNELS = 1
 RATE = 44100
-CHUNK = 1024 
-RECORD_SECONDS = 0.1
+CHUNK = 2048
+RECORD_SECONDS = 0.2
 
 i=0
-f,ax = plt.subplots(2)
+f,ax = plt.subplots(3)
 
 x = np.arange(10000)
 y = np.random.randn(10000)
 
+#plt.grid()
+
 li, = ax[0].plot(x, y)
 ax[0].set_xlim(0,1000)
 ax[0].set_ylim(-5000,5000)
-ax[0].set_title("Raw Audio Signal")
+ax[0].set_title("Raw Audio Signal", loc='center', wrap=True)
 
 li2, = ax[1].plot(x, y)
 ax[1].set_xlim(0,5000)
-ax[1].set_ylim(-100,100)
-ax[1].set_title("Fast Fourier Transform")
+ax[1].set_ylim(0,100)
+ax[1].set_title("Fast Fourier Transform", loc='center', wrap=True)
 
-plt.pause(0.01)
+ax[2].set_title("Specki", loc='center', wrap=True)
+ax[2].set_xlabel('Time (s)')
+ax[2].set_ylabel('Frequencies (Hz)')
+
+plt.pause(0.001)
 plt.tight_layout()
 
 def selectMic():
@@ -46,32 +53,29 @@ def selectMic():
     return int(input())
 
 def plot_data(in_data):
-    audio_data = np.frombuffer(in_data, np.int16)
+    audio_data = np.frombuffer(in_data, dtype=np.int16)
 
-    dfft = 10.*np.log10(abs(np.fft.rfft(audio_data)))
-    print("--- %s seconds ----" % (time.time()- time_t1)) # latency for recording
+    audio_data_ham = audio_data * np.blackman(len(audio_data))
+    dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_ham)))
     
-    dfft = 10.*np.log10(abs(np.fft.rfft(audio_data)))
-
     #for interests sake I tested a simple lp filter; maybe needed later on
     #sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
     #filtered = signal.sosfilt(sos, audio_data)
     #dfft_filtered = 10.*np.log10(abs(np.fft.rfft(filtered)))
-    f, t, Sxx = signal.spectrogram(dfft, RATE/4)
-    plt.pcolormesh(t, f, Sxx, shading='gouraud')
-    print(type(f))
     
-    #li.set_xdata(np.arange(len(audio_data)))
-    #li.set_ydata(audio_data)
-    #li2.set_xdata(np.arange(len(dfft))*10.)
-    #li2.set_ydata(dfft)
-
-    plt.pause(0.01)
+    li.set_xdata(np.arange(len(audio_data)))
+    li.set_ydata(audio_data)
+    li2.set_xdata(np.arange(len(dfft))*10.)
+    li2.set_ydata(dfft)
+    spec, freqs, t, im = ax[2].specgram(audio_data, Fs=1e3) #, scale='dB', vmax=0)
+    
+    print("--- %s seconds ----" % (time.time() - time_t1)) # latency for recording
+    
+    plt.pause(0.001)
     if keep_going:
         return True
     else:
         return False
-
 
 audio = pyaudio.PyAudio()
 
