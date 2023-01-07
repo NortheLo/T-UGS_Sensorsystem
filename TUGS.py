@@ -13,7 +13,7 @@ FORMAT = pyaudio.paInt16 # We use 16bit format per sample
 CHANNELS = 1
 RATE = 44100
 CHUNK = 2048
-RECORD_SECONDS = 0.2
+RECORD_SECONDS = 0.1
 
 i=0
 f,ax = plt.subplots(3)
