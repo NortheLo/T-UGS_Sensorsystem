@@ -32,7 +32,7 @@ ax[1].set_xlim(0,5000)
 ax[1].set_ylim(0,100)
 ax[1].set_title("Fast Fourier Transform", loc='center', wrap=True)
 
-ax[2].set_title("Specki", loc='center', wrap=True)
+ax[2].set_title("Specktrogram", loc='center', wrap=True)
 ax[2].set_xlabel('Time (s)')
 ax[2].set_ylabel('Frequencies (Hz)')
 
@@ -54,19 +54,24 @@ def selectMic():
 def plot_data(in_data):
     audio_data = np.frombuffer(in_data, dtype=np.int16)
 
+    #For interests sake I tested a simple lp filter; maybe needed later on
+    #sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
+    #audio_data = signal.sosfilt(sos, audio_data)
+    
+    # Blackman window function as it has the wide main lobe and surpresses more the side lobes 
     audio_data_ham = audio_data * np.blackman(len(audio_data))
     dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_ham)))
     
-    #for interests sake I tested a simple lp filter; maybe needed later on
-    #sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
-    #filtered = signal.sosfilt(sos, audio_data)
-    #dfft_filtered = 10.*np.log10(abs(np.fft.rfft(filtered)))
+    # Reduced sample rate for faster images and focus on sub 2k frequency bandk
+    f, t, Sxx = signal.spectrogram(audio_data, RATE/8)
+    ax[2].pcolormesh(t, f, Sxx, shading='gouraud')
     
     li.set_xdata(np.arange(len(audio_data)))
     li.set_ydata(audio_data)
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
-    spec, freqs, t, im = ax[2].specgram(audio_data, Fs=1e3) #, scale='dB', vmax=0)
+    #Suspected to no show the correct spectrogram
+    #spec, freqs, t, im = ax[2].specgram(audio_data_ham, Fs=1e3 , scale='dB', vmax=0)
     
     print("--- %s seconds ----" % (time.time() - time_t1)) # latency for recording
     
