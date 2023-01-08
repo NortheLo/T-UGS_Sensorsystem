@@ -32,7 +32,7 @@ ax[1].set_xlim(0,5000)
 ax[1].set_ylim(0,100)
 ax[1].set_title("Fast Fourier Transform", loc='center', wrap=True)
 
-ax[2].set_title("Specktrogram", loc='center', wrap=True)
+ax[2].set_title("Spectrogram", loc='center', wrap=True)
 ax[2].set_xlabel('Time (s)')
 ax[2].set_ylabel('Frequencies (Hz)')
 
@@ -64,8 +64,8 @@ def plot_data(in_data):
     
     # Reduced sample rate for faster images and focus on sub 2k frequency band
     # To be tested: mode and window
-    f, t, Sxx = signal.spectrogram(audio_data, RATE/8, window='blackman', mode='magnitude')
-    ax[2].pcolormesh(t, f, Sxx, shading='gouraud')
+    freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
+    ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
     
     li.set_xdata(np.arange(len(audio_data)))
     li.set_ydata(audio_data)
