@@ -8,8 +8,9 @@ import sys
 from scipy import signal
 from scipy.fft import fftshift
 import scipy.fftpack
+import cv2
 
-FORMAT = pyaudio.paInt16 # We use 16bit format per sample
+FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 CHUNK = 2048
@@ -54,9 +55,9 @@ def selectMic():
 def plot_data(in_data):
     audio_data = np.frombuffer(in_data, dtype=np.int16)
 
-    #For interests sake I tested a simple lp filter; maybe needed later on
-    #sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
-    #audio_data = signal.sosfilt(sos, audio_data)
+    # For interests sake I tested a simple lp filter; maybe needed later on
+    # sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
+    # audio_data = signal.sosfilt(sos, audio_data)
     
     # Blackman window function as it has the wide main lobe and surpresses more the side lobes 
     audio_data_window = audio_data * np.blackman(len(audio_data))
@@ -71,9 +72,6 @@ def plot_data(in_data):
     li.set_ydata(audio_data)
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
-
-    #Suspected to no show the correct spectrogram
-    #spec, freqs, t, im = ax[2].specgram(audio_data_ham, Fs=1e3 , scale='dB', vmax=0)
     
     print("--- %s seconds ----" % (time.time() - time_t1)) # latency for recording
     
