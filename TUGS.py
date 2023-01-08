@@ -59,17 +59,19 @@ def plot_data(in_data):
     #audio_data = signal.sosfilt(sos, audio_data)
     
     # Blackman window function as it has the wide main lobe and surpresses more the side lobes 
-    audio_data_ham = audio_data * np.blackman(len(audio_data))
-    dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_ham)))
+    audio_data_window = audio_data * np.blackman(len(audio_data))
+    dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_window)))
     
-    # Reduced sample rate for faster images and focus on sub 2k frequency bandk
-    f, t, Sxx = signal.spectrogram(audio_data, RATE/8)
+    # Reduced sample rate for faster images and focus on sub 2k frequency band
+    # To be tested: mode and window
+    f, t, Sxx = signal.spectrogram(audio_data, RATE/8, window='blackman', mode='magnitude')
     ax[2].pcolormesh(t, f, Sxx, shading='gouraud')
     
     li.set_xdata(np.arange(len(audio_data)))
     li.set_ydata(audio_data)
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
+
     #Suspected to no show the correct spectrogram
     #spec, freqs, t, im = ax[2].specgram(audio_data_ham, Fs=1e3 , scale='dB', vmax=0)
     
