@@ -34,12 +34,12 @@ gyro2_z = np.zeros(SAMPLE_RATE * WINDOW)
 accl_vec = np.zeros(SAMPLE_RATE * WINDOW)
 
 sen1 = mpu6050(0x68)
-sen2 = mpu6050(0x69)
+#sen2 = mpu6050(0x69)
 def checkSensors():
     sen1.set_accel_range(sen1.ACCEL_RANGE_2G)
     print("Reading sensor sensitivity. For optimal precision value should be -+2g")
     print("First 6050 at I2C adress 0x68: " + str(sen1.read_accel_range()) + "g")
-    print("Second 6050 at I2C adress 0x69: " + str(sen2.read_accel_range()) + "g")
+  #  print("Second 6050 at I2C adress 0x69: " + str(sen2.read_accel_range()) + "g")
 
     #enabel fifo
     sen1.configure_fifo(sen1.FIFO_FLAG_AXYZ)
@@ -48,12 +48,12 @@ def checkSensors():
     sen1.reset_fifo()
     
 
-    if (sen1.read_accel_range() != 2) or (sen2.read_accel_range() != 2):
-        print("ERROR: Sensors are not used in the correct full scale range!")
-        return True
-    else:
-        return True
-
+    # if (sen1.read_accel_range() != 2) or (sen2.read_accel_range() != 2):
+    #     print("ERROR: Sensors are not used in the correct full scale range!")
+    #     return True
+    # else:
+    #     return True
+    return True
 
 
 def update(frame):
@@ -86,7 +86,7 @@ def sensor_loop():
     while True:
         delta=datetime.datetime.now()-time_a
         time_a=datetime.datetime.now()
-        #print(delta.total_seconds()*1000)
+        print(delta.total_seconds()*1000)
         # len=sen1.get_fifo_length()
         #accels = sen1.get_fifo_data_acc(len)
         
@@ -168,9 +168,9 @@ def main():
         figure = plt.figure()
         line, = plt.plot(x_data, y_data, '-')
         #sen1.reset_fifo()
-        animation = FuncAnimation(figure, update, interval=1)
-        plt.show()
-        #sensor_loop()
+        #animation = FuncAnimation(figure, update, interval=1)
+        #plt.show()
+        sensor_loop()
 
 if __name__ == "__main__":
     main()
