@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 from queue import Queue
 
 ###SETTINGS###
-WINDOWSIZE = 500
+WINDOWSIZE = 5000
 SAMPLERATE = 500
 
 sen1 = mpu6050(0x68)
@@ -46,6 +46,12 @@ def update(frame):
     accels = sen1.get_fifo_data_acc(fifoLen//6*6)
     
     y_data += accels[0]
+    #print(np.abs(accels[0]))
+    # test = []
+    # for i in range(0,len(accels[0])):
+    #     test.append(accels[1][i] )
+
+    y_data += test
     if len(y_data) > WINDOWSIZE:
         overweight = len(y_data) - WINDOWSIZE
         del y_data[0:overweight]
