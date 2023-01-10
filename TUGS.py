@@ -37,6 +37,7 @@ ax[2].set_title("Spectrogram", loc='center', wrap=True)
 ax[2].set_xlabel('Time (s)')
 ax[2].set_ylabel('Frequencies (Hz)')
 
+
 plt.pause(0.001)
 plt.tight_layout()
 
@@ -55,6 +56,9 @@ def selectMic():
 def plot_data(in_data):
     audio_data = np.frombuffer(in_data, dtype=np.int16)
 
+    # !!! Measure steps !!!
+
+
     # For interests sake I tested a simple lp filter; maybe needed later on
     # sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
     # audio_data = signal.sosfilt(sos, audio_data)
@@ -63,17 +67,22 @@ def plot_data(in_data):
     audio_data_window = audio_data * np.blackman(len(audio_data))
     dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_window)))
     
-    # Reduced sample rate for faster images and focus on sub 2k frequency band
     # To be tested: mode and window
     freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
-    ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
+    spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
+    cv2.imshow("Mesh", spectrogram)
     
+    # Bar for seeing the db color relation
+    #bar = plt.colorbar(spec_mesh, ax=ax[2])
+    #bar.set_label('Amplitude (dB)')
+
     li.set_xdata(np.arange(len(audio_data)))
     li.set_ydata(audio_data)
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
     
-    print("--- %s seconds ----" % (time.time() - time_t1)) # latency for recording
+    print("--- %s seconds ----" % (time.time() - time_t1))
+    #print(len(spectrogram))
     
     plt.pause(0.001)
     if keep_going:
@@ -97,7 +106,6 @@ stream.start_stream()
 print ("\n+---------------------------------+")
 print ("| Press Ctrl+C to Break Recording |")
 print ("+---------------------------------+\n")
-
 
 while keep_going:
     try:
