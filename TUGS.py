@@ -1,14 +1,13 @@
+import time
+import sys
 import pyaudio
 import numpy as np
 import pylab
 import matplotlib.pyplot as plt
-from scipy.io import wavfile
-import time
-import sys
 from scipy import signal
 from scipy.fft import fftshift
 import scipy.fftpack
-import cv2
+import librosa
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -58,7 +57,6 @@ def plot_data(in_data):
 
     # !!! Measure steps !!!
 
-
     # For interests sake I tested a simple lp filter; maybe needed later on
     # sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
     # audio_data = signal.sosfilt(sos, audio_data)
@@ -70,8 +68,7 @@ def plot_data(in_data):
     # To be tested: mode and window
     freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
     spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
-    cv2.imshow("Mesh", spectrogram)
-    
+        
     # Bar for seeing the db color relation
     #bar = plt.colorbar(spec_mesh, ax=ax[2])
     #bar.set_label('Amplitude (dB)')
@@ -81,8 +78,12 @@ def plot_data(in_data):
     li2.set_xdata(np.arange(len(dfft))*10.)
     li2.set_ydata(dfft)
     
+    # Experimental
+    # Try to detect steps by extracting the bps and if it fits into the step range we will take it as a step
+    tempo, beats = librosa.beat.beat_track(y=audio_data, sr=RATE)   
+    print("Your steps dance with a BPM of " + tempo)
+    
     print("--- %s seconds ----" % (time.time() - time_t1))
-    #print(len(spectrogram))
     
     plt.pause(0.001)
     if keep_going:
