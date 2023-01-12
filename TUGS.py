@@ -52,14 +52,15 @@ def selectMic():
     print("Select microphone by id: ")
     return int(input())
 
+def bpmToMS(bpm):
+    return 60e3/bpm
+
 def plot_data(in_data):
     audio_data = np.frombuffer(in_data, dtype=np.int16)
 
-    # !!! Measure steps !!!
-
-    # For interests sake I tested a simple lp filter; maybe needed later on
-    # sos = signal.butter(10, 300, 'low', fs=RATE, output='sos')
-    # audio_data = signal.sosfilt(sos, audio_data)
+    # A butterworth bandpass  filter for filtering the high noised hissing from the cheap USB mic and the low end garbage
+    sos = signal.butter(10, [10, 800], 'bp', fs=RATE, output='sos')
+    audio_data = signal.sosfilt(sos, audio_data)
     
     # Blackman window function as it has the wide main lobe and surpresses more the side lobes 
     audio_data_window = audio_data * np.blackman(len(audio_data))
@@ -81,7 +82,7 @@ def plot_data(in_data):
     # Experimental
     # Try to detect steps by extracting the bps and if it fits into the step range we will take it as a step
     tempo, beats = librosa.beat.beat_track(y=audio_data, sr=RATE)   
-    print("Your steps dance with a BPM of " + tempo)
+    print("Your steps dance with a BPM of " % bpmToMS(tempo))
     
     print("--- %s seconds ----" % (time.time() - time_t1))
     
