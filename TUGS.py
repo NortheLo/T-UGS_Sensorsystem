@@ -1,6 +1,5 @@
 import time
 import sys
-import os
 import pyaudio
 import numpy as np
 import pylab
@@ -17,6 +16,8 @@ CHUNK = 2048
 FIFO_WINDOW = 128
 
 FIFO = np.zeros((CHUNK, CHUNK*FIFO_WINDOW), dtype=np.int16)
+
+dfft = np.empty([CHUNK, 1], dtype=np.int16)
 
 i=0
 f,ax = plt.subplots(2)
@@ -49,9 +50,9 @@ def selectMic():
     print("Select microphone by id: ")
     return int(input())
 
-def plot_data(in_data):
+def callback(in_data, frame_count, time_info, flag):
     audio_data = np.frombuffer(in_data, dtype=np.int16)
-
+    print("Callback")
     # Butterworth bandpass  filter for filtering the high noised hissing from the cheap USB mic and the low end garbage
     # Butterworth bandstop to focus on the interesting frequencies for the step detection (~40Hz and ~600-700HZ)
     sos_bp = signal.butter(10, [10, 900], 'bp', fs=RATE, output='sos')
@@ -65,34 +66,27 @@ def plot_data(in_data):
     # FFT in dB drom the windowed audio signal, using all cores of the host
     dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_window)))
     
-    # Adding values to the FIFO 
-    FIFO[:, 0] = dfft
-    # Shifting the FFTs along the second dimension
-    FIFO = shift(FIFO, (0, 1), cval=np.NaN)
-    
+
+    ## Only for checking purposes ##
     # Spectrogram from the windowed audio
     #freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
 
     # Subplot with spectrogram
     #spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
 
-    # Bar for seeing the db color relation
-    #bar = plt.colorbar(spec_mesh, ax=ax[2])
-    #bar.set_label('Amplitude (dB)')
-
-    x_axis_fft = np.arange(len(audio_data))
-    li.set_xdata(x_axis_fft)
-    li.set_ydata(audio_data)
-    li2.set_xdata(np.arange(len(dfft))*10.)
-    li2.set_ydata(dfft)
+    #x_axis_fft = np.arange(len(audio_data))
+    #li.set_xdata(x_axis_fft)
+    #li.set_ydata(audio_data)
+    #li2.set_xdata(np.arange(len(dfft[:, buffer_index]))*10.)
+    #li2.set_ydata(dfft[:, buffer_index])
     
     print("--- %s seconds ----" % (time.time() - time_t1))
-    
-    plt.pause(0.001)
-    if keep_going:
-        return True
-    else:
-        return False
+        
+    #plt.pause(0.001)
+    return (audio_data, pyaudio.paContinue)
+
+def stepDetection():
+    return True
 
 audio = pyaudio.PyAudio()
 
@@ -101,12 +95,13 @@ stream = audio.open(format=FORMAT,
                     channels=CHANNELS,
                     rate=RATE,
                     input=selectMic(),
-                    frames_per_buffer=CHUNK)
+                    frames_per_buffer=CHUNK,
+                    stream_callback=callback)
 
 global keep_going
 keep_going = True
 
-stream.start_stream()
+#tream.start_stream()
 print ("\n+---------------------------------+")
 print ("| Press Ctrl+C to Break Recording |")
 print ("+---------------------------------+\n")
@@ -114,7 +109,7 @@ print ("+---------------------------------+\n")
 while keep_going:
     try:
         time_t1 = time.time()
-        plot_data(stream.read(CHUNK))
+        stepDetection()
     except KeyboardInterrupt:
         keep_going=False
     except:
@@ -124,3 +119,9 @@ stream.stop_stream()
 stream.close()
 
 audio.terminate()
+
+
+## Adding values to the FIFO 
+#FIFO[:, 0] = dfft
+## Shifting the FFTs along the second dimension
+#FIFO = shift(FIFO, (0, 1), cval=np.NaN)
