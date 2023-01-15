@@ -16,17 +16,23 @@ from scipy.ndimage import shift
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
+PERIOD = 1/RATE * 1e3 # Time inms between samplepoints
 CHUNK = 2048
-FIFO_WINDOW = 128
-lock = threading.Lock()
-new_data = False
-
+FIFO_WINDOW = 1028
+THRESHOLD = 40
+MAX_STEP_TIME = 1300
+MIN_STEP_TIME = 300
+FRQ_OF_INTEREST = [3] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply 
 FIFO = np.zeros((CHUNK, FIFO_WINDOW), dtype=np.int16)
- 
+
 # Two dfft buffers for double buffering 
 dfft = np.zeros(CHUNK, dtype=np.int16)
 dfft_buffer = np.zeros(CHUNK, dtype=np.int16)
+    
+lock = threading.Lock()
+new_data = False
 
+# Stuff for plotting
 i=0
 f,ax = plt.subplots(2)
 
@@ -71,7 +77,7 @@ def callback(in_data, frame_count, time_info, flag):
     audio_data_bp = signal.sosfilt(sos_bp, audio_data)
     audio_data_bs = signal.sosfilt(sos_bs, audio_data_bp)
     
-    # Blackman window function as it has the wide main lobe and surpresses more the side lobes 
+    # Blackman window function as it has a wide main lobe and surpresses more the side lobes 
     audio_data_window = audio_data_bs * np.blackman(len(audio_data_bs))
     
     time_t1 = time.time()
@@ -80,11 +86,11 @@ def callback(in_data, frame_count, time_info, flag):
     dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_window)))
     new_data = True
     lock.release()
+
     print("Time of calculating the FFT\n--- %s seconds ----" % (time.time() - time_t1))
-    
     return (in_data, pyaudio.paContinue)
 
-def stepDetection():
+def intoFifo():
     global FIFO
     global dfft 
     global dfft_buffer
@@ -93,17 +99,31 @@ def stepDetection():
     while True:
         if new_data == True:
             time_t1 = time.time()
+
             lock.acquire()
-            ## Adding values to the FIFO 
             dfft_buffer = dfft
             lock.release()
             new_data = False
-            plotFFT()
-            ## Alternative but bit slower
+            
+            # Shift array to the left and in the first column is the backside buffer of the dfft 
             FIFO = np.roll(FIFO, 1)
             FIFO[:, 0] = dfft_buffer   
             print("Time of FIFO manipulation\n--- %s seconds ----" % (time.time() - time_t1))
+            stepTimedelta()
         plotFFT()
+
+def stepTimedelta():
+    for i in FRQ_OF_INTEREST:
+        freqbins_over_time = FIFO[i, :]
+        idx = np.where(freqbins_over_time > THRESHOLD)
+        time_deltas = PERIOD * np.diff(idx)
+        avg_t_delta = np.average(time_deltas)
+        if avg_t_delta > MIN_STEP_TIME and avg_t_delta < MAX_STEP_TIME:
+            print("Steps detected!!!\nStep-Time: %s" % avg_t_delta)
+            return avg_t_delta
+    print("No steps detected!")            
+    return 0
+
 
 def plotFFT():
     global dfft_buffer
@@ -120,7 +140,7 @@ def closeAudio():
 
 audio = pyaudio.PyAudio()
 
-# start Recording
+# start recording
 stream = audio.open(format=FORMAT,
                     channels=CHANNELS,
                     rate=RATE,
@@ -137,7 +157,7 @@ def main():
     
     try:
         while stream.is_active() and keep_going:
-            stepDetection() 
+            intoFifo() 
     except (KeyboardInterrupt, SystemExit):
         keep_going = False
         closeAudio()
@@ -155,4 +175,3 @@ if __name__ == "__main__":
 #li.set_xdata(x_axis_fft)
 #li.set_ydata(audio_data)
 
-## Too slow
