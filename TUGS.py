@@ -16,13 +16,13 @@ from scipy.ndimage import shift
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
-PERIOD = 1/RATE * 1e3 # Time inms between samplepoints
+PERIOD = 1/RATE * 1e3 # Time in ms between samplepoints
 CHUNK = 2048
-FIFO_WINDOW = 1028
-THRESHOLD = 40
+FIFO_WINDOW = 128
+THRESHOLD = 60
 MAX_STEP_TIME = 1300
 MIN_STEP_TIME = 300
-FRQ_OF_INTEREST = [3] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply 
+FRQ_OF_INTEREST = [2] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply; 20Hz is interesting aswell as 400Hz 
 FIFO = np.zeros((CHUNK, FIFO_WINDOW), dtype=np.int16)
 
 # Two dfft buffers for double buffering 
@@ -83,10 +83,10 @@ def callback(in_data, frame_count, time_info, flag):
     time_t1 = time.time()
     lock.acquire()
     # FFT in dB drom the windowed audio signal, using all cores of the host
-    dfft = 20* np.log10(np.abs(scipy.fftpack.rfft(audio_data_window)))
+    dfft = 20* np.log10(np.abs(scipy.fftpack.fft(audio_data_window)))
     new_data = True
     lock.release()
-
+    
     print("Time of calculating the FFT\n--- %s seconds ----" % (time.time() - time_t1))
     return (in_data, pyaudio.paContinue)
 
@@ -104,11 +104,13 @@ def intoFifo():
             dfft_buffer = dfft
             lock.release()
             new_data = False
-            
+
             # Shift array to the left and in the first column is the backside buffer of the dfft 
             FIFO = np.roll(FIFO, 1)
             FIFO[:, 0] = dfft_buffer   
             print("Time of FIFO manipulation\n--- %s seconds ----" % (time.time() - time_t1))
+            # For seeing the values in the 20Hz bin in the FIFO
+            print(FIFO[2, :])
             stepTimedelta()
         plotFFT()
 
@@ -116,11 +118,13 @@ def stepTimedelta():
     for i in FRQ_OF_INTEREST:
         freqbins_over_time = FIFO[i, :]
         idx = np.where(freqbins_over_time > THRESHOLD)
-        time_deltas = PERIOD * np.diff(idx)
-        avg_t_delta = np.average(time_deltas)
-        if avg_t_delta > MIN_STEP_TIME and avg_t_delta < MAX_STEP_TIME:
-            print("Steps detected!!!\nStep-Time: %s" % avg_t_delta)
-            return avg_t_delta
+        print("idx %s" % idx)
+        time_deltas = np.diff(idx)
+        print("Step time deltas: \n%s" % time_deltas)
+        #avg_t_delta = np.average(time_deltas)
+        #if avg_t_delta > MIN_STEP_TIME and avg_t_delta < MAX_STEP_TIME:
+            #print("Steps detected!!!\nStep-Time: %s" % avg_t_delta)
+            #return avg_t_delta
     print("No steps detected!")            
     return 0
 
