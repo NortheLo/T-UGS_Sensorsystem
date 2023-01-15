@@ -12,7 +12,6 @@ from scipy.ndimage import shift
 
 ## TO-DO: 
 #       -Selecting the corresponding axis and calculating the delay between taps
-#       -Improving speed by reducing fifo size
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -22,9 +21,11 @@ FIFO_WINDOW = 128
 lock = threading.Lock()
 new_data = False
 
-FIFO = np.zeros((CHUNK, CHUNK*FIFO_WINDOW), dtype=np.int16)
+FIFO = np.zeros((CHUNK, FIFO_WINDOW), dtype=np.int16)
  
+# Two dfft buffers for double buffering 
 dfft = np.zeros(CHUNK, dtype=np.int16)
+dfft_buffer = np.zeros(CHUNK, dtype=np.int16)
 
 i=0
 f,ax = plt.subplots(2)
@@ -60,6 +61,7 @@ def selectMic():
 def callback(in_data, frame_count, time_info, flag):
     global dfft
     global new_data
+    
     audio_data = np.frombuffer(in_data, dtype=np.int16)
 
     # Butterworth bandpass  filter for filtering the high noised hissing from the cheap USB mic and the low end garbage
@@ -80,32 +82,33 @@ def callback(in_data, frame_count, time_info, flag):
     lock.release()
     print("Time of calculating the FFT\n--- %s seconds ----" % (time.time() - time_t1))
     
-    #print("New FFT has been calculated")
     return (in_data, pyaudio.paContinue)
 
 def stepDetection():
     global FIFO
     global dfft 
+    global dfft_buffer
     global new_data
 
     while True:
         if new_data == True:
-            print("Starting copying buffer")
+            time_t1 = time.time()
             lock.acquire()
             ## Adding values to the FIFO 
             dfft_buffer = dfft
             lock.release()
             new_data = False
-
-            time_t1 = time.time()
-            ## Shifting the FFTs along the second dimension
+            plotFFT()
+            ## Alternative but bit slower
             FIFO = np.roll(FIFO, 1)
             FIFO[:, 0] = dfft_buffer   
-            print("Time of writing to the FIFO\n--- %s seconds ----" % (time.time() - time_t1))
+            print("Time of FIFO manipulation\n--- %s seconds ----" % (time.time() - time_t1))
+        plotFFT()
 
 def plotFFT():
-    li2.set_xdata(np.arange(len(dfft))*10.)
-    li2.set_ydata(dfft)
+    global dfft_buffer
+    li2.set_xdata(np.arange(len(dfft_buffer))*10.)
+    li2.set_ydata(dfft_buffer)
     plt.pause(0.0001)
     return True
 
@@ -113,6 +116,7 @@ def closeAudio():
         stream.stop_stream()
         stream.close()
         audio.terminate()
+        sys.exit()
 
 audio = pyaudio.PyAudio()
 
@@ -132,29 +136,23 @@ def main():
     keep_going = True
     
     try:
-        detection_thread = threading.Thread(target=stepDetection)
-        detection_thread.start()
+        while stream.is_active() and keep_going:
+            stepDetection() 
     except (KeyboardInterrupt, SystemExit):
-        print("Couldnt start thread!")
         keep_going = False
         closeAudio()
-
-    while stream.is_active() and keep_going:
-        try:
-            plotFFT()
-        except KeyboardInterrupt:
-            keep_going = False
-            closeAudio()
 
 if __name__ == "__main__":
     main()
 
-    ## Only for checking purposes ##
-    # Spectrogram from the windowed audio
-    #freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
+## Only for checking purposes ##
+# Spectrogram from the windowed audio
+#freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
 
-    # Subplot with spectrogram
-    #spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
-    #x_axis_fft = np.arange(len(audio_data))
-    #li.set_xdata(x_axis_fft)
-    #li.set_ydata(audio_data)
+# Subplot with spectrogram
+#spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
+#x_axis_fft = np.arange(len(audio_data))
+#li.set_xdata(x_axis_fft)
+#li.set_ydata(audio_data)
+
+## Too slow
