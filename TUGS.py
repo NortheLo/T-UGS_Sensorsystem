@@ -123,12 +123,11 @@ def stepTimedelta():
         print("Step time deltas: \n%s" % time_deltas)
 
         avg_t_delta = np.average(time_deltas)
-        if avg_t_delta > MIN_STEP_TIME and avg_t_delta < MAX_STEP_TIME:
+        if (avg_t_delta > MIN_STEP_TIME) and (avg_t_delta < MAX_STEP_TIME):
             print("Steps detected!!!")
             return avg_t_delta
     print("No steps detected!")            
     return 0
-
 
 def plotFFT():
     global dfft_buffer
