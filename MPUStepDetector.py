@@ -12,11 +12,11 @@ from queue import Queue
 WINDOWSIZE = 5000 # samples
 SAMPLERATE = 500 # Hz
 
-PEAKTHRESHHOLD = 1000 # raw
+PEAKTHRESHHOLD = 200 # raw
 SETTLEMAX = 500 # raw
 NLARGEST = 100 # count
 
-STEPDURATION_MIN = 300 # minimum time between steps in ms
+STEPDURATION_MIN = 50 # minimum time between steps in ms
 STEPDURATION_MAX = 1300# maximum time between steps in ms
 
 ####

@@ -45,20 +45,21 @@ def update(frame):
     #print(fifoLen//6*6)
     accels = sen1.get_fifo_data_acc(fifoLen//6*6)
     
-    y_data += accels[0]
+    y_data += accels[1]
     #print(np.abs(accels[0]))
     # test = []
     # for i in range(0,len(accels[0])):
     #     test.append(accels[1][i] )
 
-    y_data += test
+    #y_data += test
     if len(y_data) > WINDOWSIZE:
         overweight = len(y_data) - WINDOWSIZE
         del y_data[0:overweight]
     x_data = range(0,len(y_data))
-    line[0].set_data(x_data,y_data)
+    ydat_calib = np.subtract(y_data,15300)
+    line[0].set_data(x_data,ydat_calib)
     
-    fftCalc(y_data,line[1])
+    fftCalc(ydat_calib,line[1])
 
     ax1.autoscale_view()
     ax1.relim()
