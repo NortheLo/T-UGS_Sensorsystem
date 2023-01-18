@@ -26,12 +26,6 @@ def checkSensors():
     return True
     
 
-def fftCalc(buffer,line):
-    N = len(buffer)
-    yf = fft(buffer)
-    xf = fftfreq(N,1/SAMPLERATE)
-    line.set_data(xf,np.abs(yf))
-
 def update(frame):
     global figure1
     global x_data

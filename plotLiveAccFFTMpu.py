@@ -29,6 +29,8 @@ def fftCalc(buffer,line):
     N = len(buffer)
     yf = fft(buffer)
     xf = fftfreq(N,1/SAMPLERATE)
+    #print(xf)
+    #print(np.abs(yf))
     line.set_data(xf,np.abs(yf))
 
 def update(frame):
