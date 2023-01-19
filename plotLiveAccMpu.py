@@ -34,14 +34,18 @@ def update(frame):
     global animation
     global ax1
     global ax2
+    global first
     #x_data.append(datetime.datetime.now())
     fifoLen=sen1.get_fifo_length()
 
     #print(fifoLen//6*6)
+    if(first):
+        sen1.reset_fifo()
+        first=False
     accels = sen1.get_fifo_data_acc(fifoLen//6*6)
     #b, a = scipy.signal.butter(6, 45/(SAMPLERATE/2), btype='low')
     b, a = scipy.signal.butter(6, [20/(SAMPLERATE/2), 45/(SAMPLERATE/2)], btype='band')
-    y_data += accels[1]
+    y_data += accels[2]
     filtered = scipy.signal.filtfilt(b, a, y_data)
 
     if len(y_data) > WINDOWSIZE:
@@ -76,7 +80,8 @@ def main():
     global ax2
     global line
     global animation
-
+    global first
+    first = True
     if(checkSensors()):
         x_data, y_data = [], []
 
@@ -89,6 +94,8 @@ def main():
         #sen1.reset_fifo()
         animation = FuncAnimation(figure1, update, interval=1, repeat=False)
         plt.show()
+        
 
 if __name__ == "__main__":
     main()
+    print("test")
