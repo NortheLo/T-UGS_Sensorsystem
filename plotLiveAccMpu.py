@@ -7,10 +7,13 @@ import scipy.signal
 import datetime
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from queue import Queue
+from scipy.signal import lfilter
+from scipy.signal import savgol_filter
+
+#tried savgol, lfilter, butterworth
 
 ###SETTINGS###
-WINDOWSIZE = 5000
+WINDOWSIZE = 2000
 SAMPLERATE = 500
 
 sen1 = mpu6050(0x68)
@@ -43,17 +46,22 @@ def update(frame):
         sen1.reset_fifo()
         first=False
     accels = sen1.get_fifo_data_acc(fifoLen//6*6)
-    #b, a = scipy.signal.butter(6, 45/(SAMPLERATE/2), btype='low')
-    b, a = scipy.signal.butter(6, [20/(SAMPLERATE/2), 45/(SAMPLERATE/2)], btype='band')
+    b, a = scipy.signal.butter(6, 20/(SAMPLERATE/2), btype='low')
+    #b, a = scipy.signal.butter(6, [20/(SAMPLERATE/2), 45/(SAMPLERATE/2)], btype='band')
     y_data += accels[2]
-    filtered = scipy.signal.filtfilt(b, a, y_data)
-
+    data_calibrated = np.subtract(y_data,15250)
+    window = scipy.signal.windows.tukey(len(data_calibrated))
+    #window = scipy.signal.windows.hamming(len(data_calibrated))
+    data_windowed = data_calibrated * window
+    filtered = scipy.signal.filtfilt(b, a, data_windowed)
+    #filtered = lfilter([1.0 / 15] * 15, 1, data_calibrated)
+    #filtered = savgol_filter(data_calibrated, 101, 2)
     if len(y_data) > WINDOWSIZE:
         overweight = len(y_data) - WINDOWSIZE
         del y_data[0:overweight]
     x_data = range(0,len(y_data))
     line[0].set_data(x_data,y_data)
-    line[1].set_data(x_data,filtered[:5000])
+    line[1].set_data(x_data,filtered[:WINDOWSIZE])
     #print(len(filtered[:5000]))
     ax1.autoscale_view()
     ax1.relim()

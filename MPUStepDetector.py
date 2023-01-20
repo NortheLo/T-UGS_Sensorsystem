@@ -5,18 +5,22 @@ from scipy.fft import fft, ifft, fftfreq, fftshift
 import scipy.signal
 from threading import Thread
 from threading import Event
+import matplotlib.pyplot as plt
+import datetime
 
 ###SETTINGS###
 SENSORAXIS = 2
 WINDOWSIZE = 5000 # samples
+FILTER_WINDOWSIZE = 2000 #samples
+FILTER_APPENDIDX = 1000# samples
 SAMPLERATE = 500 # Hz
 
-PEAKTHRESHHOLD = 500 # raw
+PEAKTHRESHHOLD = 300 # raw
 SETTLEMAX = 500 # raw
 NLARGEST = 100 # count
-EVENTDURATION = 200 # ms
+EVENTDURATION = 500 # ms
 
-STEPDURATION_MIN = 50 # minimum time between steps in ms
+STEPDURATION_MIN = 550 # minimum time between steps in ms
 STEPDURATION_MAX = 1300# maximum time between steps in ms
 
 LOOPDELAY = 0.001 #s
@@ -34,12 +38,15 @@ SAMPLETIME = 1/SAMPLERATE*1000 # ms
 
 class MPUStepDetector():
     buffer = []
+    stepTracker = [5000,5000,4000]
     callback = None
-    calibration_rms = 15300
+    calibration_rms = 15250
     calibration_center = 20
     calibration_threshhold = PEAKTHRESHHOLD
     stopEvent = Event()
-
+    enableFilter=True
+    last=datetime.datetime.now()
+    test=0
     def __init__(self, address):
         self.sen1 = mpu6050(address)
         self.sen1.set_accel_range(self.sen1.ACCEL_RANGE_2G)
@@ -49,12 +56,20 @@ class MPUStepDetector():
         self.sen1.reset_fifo()
         self.setFilterParameters(100,3)
         self.thread = Thread(target = self.runner)
+        x = range(0,5000)
+        y = range(0,5000)
+        self.counter = 0
+            
+        
+        
 
+        
     def getRMS(self,buffer):
         peaks = np.argpartition(buffer,-NLARGEST)[-NLARGEST:]
         bufferNoPeaks = np.delete(buffer,peaks)
         rms = np.sqrt(np.mean(bufferNoPeaks**2))
-        return rms
+        rmsPeaks = np.sqrt(np.mean(np.array(buffer)[peaks]**2))
+        return rms,rmsPeaks
 
     def getRawBuffer(self):
         fifoLen = self.sen1.get_fifo_length()
@@ -62,33 +77,72 @@ class MPUStepDetector():
         return accels[SENSORAXIS]
 
     def updateWindowedBuffer(self):
-        self.buffer += self.getRawBuffer()
+        rawData = self.getRawBuffer()
+        self.buffer += rawData
         if len(self.buffer) > WINDOWSIZE:
             overweight = len(self.buffer) - WINDOWSIZE
-            self.deleteWindow(overweight)
-        return self.buffer
+            self.deleteWindow(self.buffer,overweight)
+        #print(len(rawData))
+        #print(len(self.buffer))
+        return len(rawData),self.buffer
 
-    def deleteWindow(self,upTo):
-        del self.buffer[0:upTo]
+    def deleteWindow(self,buffer,upTo):
+        del buffer[0:upTo]
+        x_data = range(0,len(buffer))
+        #print(self.buffer)
 
     def detector(self,rms,threshhold):
-        data = np.array(self.updateWindowedBuffer())
+        readLen,wUpdate=self.updateWindowedBuffer()
+        
+        self.stepTracker=np.subtract(self.stepTracker,readLen).tolist()
+        self.test+=readLen
+        #print(self.test)
+        #print(self.stepTracker)
+        self.stepTracker = [i for i in self.stepTracker if i > 0]
+
+        data = np.array(wUpdate)
         data_calibrated = np.subtract(data,rms)
         if(len(data) < 30):
             return
-        filteredBuf = scipy.signal.filtfilt(self.filtB,self.filtA,data_calibrated)[:WINDOWSIZE]
-        buffer = filteredBuf
-        peakInd = np.where(data_calibrated > threshhold)
+
+        if(self.enableFilter):
+            window = scipy.signal.windows.tukey(len(data_calibrated))
+            data_windowed = data_calibrated * window
+            filteredBuf = scipy.signal.filtfilt(self.filtB,self.filtA,data_windowed)[:WINDOWSIZE]
+            buffer = filteredBuf
+        else:
+            buffer = data_calibrated
+
+        peakInd = np.where(buffer > threshhold)[0]
+
         #print(buffer)
-        last = len(buffer)
-        for idx in peakInd[0]:
-            stepDuration = (idx - last) * SAMPLETIME
-            if stepDuration > STEPDURATION_MIN and stepDuration < STEPDURATION_MAX:
-                print(time.time(),"::STEP!")
-                self.deleteWindow(idx+int(EVENTDURATION/SAMPLETIME))
-                if(self.callback != None):
-                    self.callback(stepDuration)
-            last=idx
+        # if(len(peakInd)>0):
+        #     print(peakInd[0])
+        for idx in peakInd:
+            for idx2 in peakInd:
+                stepDuration = (idx - idx2) * SAMPLETIME
+                if stepDuration > STEPDURATION_MIN and stepDuration < STEPDURATION_MAX: # if positive, idx is greater and therefore we have to delete up to idx2 to prevent deleting both steps         
+                    already = np.any(np.isclose(self.stepTracker,idx,atol=EVENTDURATION/SAMPLETIME))
+
+                    
+                    print(time.time(),"::STEP!")
+                    self.stepTracker.append(idx2)
+                    x_data = range(0,len(self.buffer))
+                    #plt.plot(x_data,self.buffer)
+                    #plt.show()
+                    self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME))
+                    x_data = range(0,len(self.buffer))
+                    #plt.plot(x_data,self.buffer)
+                    #plt.show()
+                    if(self.callback != None):
+                        self.callback(stepDuration)
+                    self.sen1.reset_fifo()
+
+                    return
+
+#Problem for Doku: signal gets filteres everytime, whole buffer changes, end is abrupt and generates unwanted spikes --> Hamming window
+
+
 
     def setFilterParameters(self,centerFreq,order):
         self.filtB, self.filtA = scipy.signal.butter(order, centerFreq/(SAMPLERATE/2), btype='low')
@@ -113,12 +167,13 @@ class MPUStepDetector():
                 data += accels[2]
             if(len(data) > CALIBRATION_SAMPLES):
                 print("calibrate still success - RMS:")
-                rms = self.getRMS(data)
+                rms,rmsPeaks = self.getRMS(data)
                 print(rms)
-                return rms
+                print(rmsPeaks)
+                return rms,rmsPeaks
         
 
-    def calibrate_Steps(self,rms):
+    def calibrate_Steps(self,rms,rmsPeaks):
         print("calibrating center frequency - walk around (at least 5 steps)")
         data = []
         b, a = scipy.signal.iirnotch(NOTCHFREQ,QUALITYFACTOR,SAMPLERATE)
@@ -132,25 +187,41 @@ class MPUStepDetector():
 
         print("calibrate Center success - mean and center freq:")
         data_calibrated = np.subtract(data,rms)
-        filtered = scipy.signal.filtfilt(b, a, data_calibrated)
-        fftX,fftY = self.fftCalc(filtered)
-        centerFreq = abs(fftX[np.argsort(-fftY)[0]])
-        if(centerFreq<1):
-            centerFreq = abs(fftX[np.argsort(-fftY)[1]])
-        b, a = scipy.signal.butter(3, centerFreq/(SAMPLERATE/2), btype='low')
-        filtered = scipy.signal.filtfilt(b, a, data_calibrated)
-        filtered_sorted_indices = np.argsort(filtered)
-        sorted_data = filtered[filtered_sorted_indices]
-        mean_StepThreshhold = np.mean(sorted_data[-NLARGEST : ])
-        print(mean_StepThreshhold)
+        centerFreq=0
+        if(self.enableFilter):
+            filtered = scipy.signal.filtfilt(b, a, data_calibrated)
+            fftX,fftY = self.fftCalc(filtered)
+            centerFreq = abs(fftX[np.argsort(-fftY)[0]])
+            if(centerFreq<1):
+                centerFreq = abs(fftX[np.argsort(-fftY)[1]])
+            b, a = scipy.signal.butter(3, centerFreq/(SAMPLERATE/2), btype='low')
+            buf = scipy.signal.filtfilt(b, a, data_calibrated)
+        else:
+            buf=data_calibrated
+
+        sorted_indices = np.argsort(buf)
+        sorted_data = buf[sorted_indices]
+        mean_max = np.mean(sorted_data[-NLARGEST : ])
+        threshhold = (mean_max + (rmsPeaks-rms))/2
+        #threshhold currently is between max noise and mean of peaks
+        print(threshhold)
         print(centerFreq)
-        return centerFreq,mean_StepThreshhold
+        return centerFreq,threshhold
 
 
     def calibrate(self):
-        self.calibration_rms = self.calibrate_still()
-        self.calibration_center,self.calibration_threshhold = self.calibrate_Steps(self.calibration_rms)
-        self.setFilterParameters(self.calibration_center,3)
+        self.calibration_rms,rmsPeaks = self.calibrate_still()
+        self.calibration_center,self.calibration_threshhold = self.calibrate_Steps(self.calibration_rms,rmsPeaks)
+        print("threshhold: ",self.calibration_threshhold)
+        if(self.enableFilter):
+            self.setFilterParameters(self.calibration_center,3)
+
+    def setRms(self,rms):
+        self.calibration_rms = rms
+    def setThreshhold(self,thresh):
+        self.calibration_threshhold=thresh
+    def enableFilter(self,status):
+        self.enableFilter=status
 
     def runner(self):
         while(not self.stopEvent.is_set()):
@@ -167,11 +238,25 @@ class MPUStepDetector():
 def test(var):
     print("hooray: ",var)
 
+
+
+# if __name__ == "__main__":
+#     global sd 
+#     sd = MPUStepDetector(0x68)
+#     sd.setCallback(test)
+#     #sd.calibrate()
+#     sd.setFilterParameters(20,3)
+#     sd.startAsync()
+#     while(True):
+#         time.sleep(1)
+
 if __name__ == "__main__":
     global sd 
     sd = MPUStepDetector(0x68)
     sd.setCallback(test)
-    sd.calibrate()
-    sd.startAsync()
+    #sd.calibrate()
+    sd.setFilterParameters(100,3)
+    sd.enableFilter(False)
+    sd.runner()
     while(True):
         time.sleep(1)

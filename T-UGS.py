@@ -9,6 +9,7 @@ def testCallback(stepDuration): # callback function
 
 mpuDetector = MPUStepDetector(0x68)
 mpuDetector.setCallback(testCallback)
+mpuDetector.enableFilter(True)
 mpuDetector.calibrate()
 mpuDetector.startAsync()#start thread in library
 time.sleep(60)
