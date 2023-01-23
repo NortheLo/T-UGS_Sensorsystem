@@ -10,17 +10,17 @@ import datetime
 
 ###SETTINGS###
 SENSORAXIS = 2
-WINDOWSIZE = 5000 # samples
-FILTER_WINDOWSIZE = 2000 #samples
-FILTER_APPENDIDX = 1000# samples
+WINDOWSIZE = 3000 # samples
+FILTER_INVALIDZONE = 150
+FILTER_MIN = 20 # Hz
 SAMPLERATE = 500 # Hz
 
 PEAKTHRESHHOLD = 300 # raw
 SETTLEMAX = 500 # raw
 NLARGEST = 100 # count
-EVENTDURATION = 500 # ms
+EVENTDURATION = 300 # ms
 
-STEPDURATION_MIN = 550 # minimum time between steps in ms
+STEPDURATION_MIN = 350 # minimum time between steps in ms
 STEPDURATION_MAX = 1300# maximum time between steps in ms
 
 LOOPDELAY = 0.001 #s
@@ -46,7 +46,8 @@ class MPUStepDetector():
     stopEvent = Event()
     enableFilter=True
     last=datetime.datetime.now()
-    test=0
+    test=False
+    invalidRange = 0
     def __init__(self, address):
         self.sen1 = mpu6050(address)
         self.sen1.set_accel_range(self.sen1.ACCEL_RANGE_2G)
@@ -79,12 +80,13 @@ class MPUStepDetector():
     def updateWindowedBuffer(self):
         rawData = self.getRawBuffer()
         self.buffer += rawData
+        overweight=0
         if len(self.buffer) > WINDOWSIZE:
             overweight = len(self.buffer) - WINDOWSIZE
             self.deleteWindow(self.buffer,overweight)
         #print(len(rawData))
         #print(len(self.buffer))
-        return len(rawData),self.buffer
+        return overweight,self.buffer
 
     def deleteWindow(self,buffer,upTo):
         del buffer[0:upTo]
@@ -95,53 +97,53 @@ class MPUStepDetector():
         readLen,wUpdate=self.updateWindowedBuffer()
         
         self.stepTracker=np.subtract(self.stepTracker,readLen).tolist()
-        self.test+=readLen
-        #print(self.test)
-        #print(self.stepTracker)
-        self.stepTracker = [i for i in self.stepTracker if i > 0]
+        
+        if(self.invalidRange > 0):
+            self.invalidRange-=readLen
 
         data = np.array(wUpdate)
         data_calibrated = np.subtract(data,rms)
-        if(len(data) < 30):
+        #print(len(data))
+        if(len(data) < 50):
             return
 
         if(self.enableFilter):
             window = scipy.signal.windows.tukey(len(data_calibrated))
             data_windowed = data_calibrated * window
-            filteredBuf = scipy.signal.filtfilt(self.filtB,self.filtA,data_windowed)[:WINDOWSIZE]
-            buffer = filteredBuf
+            filteredBuf = scipy.signal.filtfilt(self.filtB,self.filtA,data_calibrated)[:WINDOWSIZE]
+            buffer = filteredBuf[FILTER_INVALIDZONE:len(data_calibrated)-FILTER_INVALIDZONE]
         else:
             buffer = data_calibrated
-
+        validBuffer = buffer[int(self.invalidRange+EVENTDURATION/SAMPLETIME):]
         peakInd = np.where(buffer > threshhold)[0]
-
-        #print(buffer)
-        # if(len(peakInd)>0):
-        #     print(peakInd[0])
+        
         for idx in peakInd:
             for idx2 in peakInd:
                 stepDuration = (idx - idx2) * SAMPLETIME
-                if stepDuration > STEPDURATION_MIN and stepDuration < STEPDURATION_MAX: # if positive, idx is greater and therefore we have to delete up to idx2 to prevent deleting both steps         
-                    already = np.any(np.isclose(self.stepTracker,idx,atol=EVENTDURATION/SAMPLETIME))
-
-                    
+                if stepDuration > STEPDURATION_MIN and stepDuration < STEPDURATION_MAX: # if positive, idx is greater and therefore we have to delete up to idx2 to prevent deleting both steps     
+                    #theoretically we have to check if there are peaks between the peaks, and if, we have to classify if it is noise or not. but this gets out of hand quickly.
+                    #check RMS between peaks
+                    rmsCheck,rmsP = self.getRMS(buffer[idx2:idx])
+                    if(rmsCheck > threshhold):
+                        print("excessive noise detected, invalidating step!")
+                        self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME)+FILTER_INVALIDZONE)
+                        self.sen1.reset_fifo()
+                        return
                     print(time.time(),"::STEP!")
-                    self.stepTracker.append(idx2)
-                    x_data = range(0,len(self.buffer))
+                    self.invalidRange=idx2
                     #plt.plot(x_data,self.buffer)
                     #plt.show()
-                    self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME))
+                    self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME)+FILTER_INVALIDZONE)
                     x_data = range(0,len(self.buffer))
                     #plt.plot(x_data,self.buffer)
                     #plt.show()
                     if(self.callback != None):
                         self.callback(stepDuration)
                     self.sen1.reset_fifo()
-
                     return
 
-#Problem for Doku: signal gets filteres everytime, whole buffer changes, end is abrupt and generates unwanted spikes --> Hamming window
-
+#Problem for Doku: signal gets filteres everytime, whole buffer changes, end is abrupt and generates unwanted spikes --> tukey window
+#tukey window too much latency and really not good.
 
 
     def setFilterParameters(self,centerFreq,order):
@@ -192,8 +194,12 @@ class MPUStepDetector():
             filtered = scipy.signal.filtfilt(b, a, data_calibrated)
             fftX,fftY = self.fftCalc(filtered)
             centerFreq = abs(fftX[np.argsort(-fftY)[0]])
-            if(centerFreq<1):
-                centerFreq = abs(fftX[np.argsort(-fftY)[1]])
+            i=1
+            while(centerFreq<FILTER_MIN or len(fftX) == i-1):
+                centerFreq = abs(fftX[np.argsort(-fftY)[i]])
+                i+=1
+            if(centerFreq < FILTER_MIN):
+                print("center frequency would be below limit. capping to minimum frequency.")
             b, a = scipy.signal.butter(3, centerFreq/(SAMPLERATE/2), btype='low')
             buf = scipy.signal.filtfilt(b, a, data_calibrated)
         else:
@@ -236,7 +242,8 @@ class MPUStepDetector():
         self.stopEvent.set()
 
 def test(var):
-    print("hooray: ",var)
+    pass
+    #print("hooray: ",var)
 
 
 
@@ -255,7 +262,7 @@ if __name__ == "__main__":
     sd = MPUStepDetector(0x68)
     sd.setCallback(test)
     #sd.calibrate()
-    sd.setFilterParameters(100,3)
+    sd.setFilterParameters(11,3)
     sd.enableFilter(False)
     sd.runner()
     while(True):

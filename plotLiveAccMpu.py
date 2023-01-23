@@ -46,14 +46,14 @@ def update(frame):
         sen1.reset_fifo()
         first=False
     accels = sen1.get_fifo_data_acc(fifoLen//6*6)
-    b, a = scipy.signal.butter(6, 20/(SAMPLERATE/2), btype='low')
+    b, a = scipy.signal.butter(3, 11/(SAMPLERATE/2), btype='low')
     #b, a = scipy.signal.butter(6, [20/(SAMPLERATE/2), 45/(SAMPLERATE/2)], btype='band')
     y_data += accels[2]
     data_calibrated = np.subtract(y_data,15250)
     window = scipy.signal.windows.tukey(len(data_calibrated))
     #window = scipy.signal.windows.hamming(len(data_calibrated))
     data_windowed = data_calibrated * window
-    filtered = scipy.signal.filtfilt(b, a, data_windowed)
+    filtered = scipy.signal.filtfilt(b, a, data_calibrated)
     #filtered = lfilter([1.0 / 15] * 15, 1, data_calibrated)
     #filtered = savgol_filter(data_calibrated, 101, 2)
     if len(y_data) > WINDOWSIZE:
