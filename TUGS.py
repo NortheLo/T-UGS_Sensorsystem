@@ -10,8 +10,6 @@ from scipy.fft import fftshift
 import scipy.fftpack
 from scipy.ndimage import shift
 
-## TO-DO: 
-#       -Selecting the corresponding axis and calculating the delay between taps
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -170,14 +168,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-## Only for checking purposes ##
-# Spectrogram from the windowed audio
-#freq, times, spectrogram = signal.spectrogram(audio_data, RATE, window='blackman')
-
-# Subplot with spectrogram
-#spec_mesh = ax[2].pcolormesh(times, freq, 10.*np.log10(spectrogram), shading='gouraud')
-#x_axis_fft = np.arange(len(audio_data))
-#li.set_xdata(x_axis_fft)
-#li.set_ydata(audio_data)
 
