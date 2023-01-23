@@ -18,11 +18,12 @@ CHANNELS = 1
 RATE = 44100
 CHUNK = 2048
 PERIOD = CHUNK * 1/RATE * 1e3 # Time in ms between samplepoints
-FIFO_WINDOW = 128
-THRESHOLD = 60
+FIFO_WINDOW = 32
+THRESHOLD = 55
 MAX_STEP_TIME = 1300
 MIN_STEP_TIME = 300
-FRQ_OF_INTEREST = [2] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply; 20Hz is interesting aswell as 400Hz 
+FRQ_OF_INTEREST = [2] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply; 20Hz is interesting aswell as 400Hz;
+                      # The higher frequencies seem to be more interesting to find out the hardness of the materials of the shoes and ground
 FIFO = np.zeros((CHUNK, FIFO_WINDOW), dtype=np.int16)
 
 # Two dfft buffers for double buffering 
@@ -80,14 +81,14 @@ def callback(in_data, frame_count, time_info, flag):
     # Blackman window function as it has a wide main lobe and surpresses more the side lobes 
     audio_data_window = audio_data_bs * np.blackman(len(audio_data_bs))
     
-    time_t1 = time.time()
+    #time_t1 = time.time()
     lock.acquire()
     # FFT in dB drom the windowed audio signal, using all cores of the host
     dfft = 20* np.log10(np.abs(scipy.fftpack.fft(audio_data_window)))
     new_data = True
     lock.release()
     
-    print("Time of calculating the FFT\n--- %s seconds ----" % (time.time() - time_t1))
+    #print("Time of calculating the FFT\n--- %s seconds ----" % (time.time() - time_t1))
     return (in_data, pyaudio.paContinue)
 
 def intoFifo():
@@ -98,7 +99,7 @@ def intoFifo():
 
     while True:
         if new_data == True:
-            time_t1 = time.time()
+            #time_t1 = time.time()
 
             lock.acquire()
             dfft_buffer = dfft
@@ -108,7 +109,8 @@ def intoFifo():
             # Shift array to the left and in the first column is the backside buffer of the dfft 
             FIFO = np.roll(FIFO, 1)
             FIFO[:, 0] = dfft_buffer   
-            print("Time of FIFO manipulation\n--- %s seconds ----" % (time.time() - time_t1))
+            #print("Time of FIFO manipulation\n--- %s seconds ----" % (time.time() - time_t1))
+
             # For seeing the values in the 20Hz bin in the FIFO
             #print(FIFO[2, :])
             stepTimedelta()
@@ -125,9 +127,9 @@ def stepTimedelta():
         avg_t_delta = np.average(time_deltas)
         if (avg_t_delta > MIN_STEP_TIME) and (avg_t_delta < MAX_STEP_TIME):
             print("Steps detected!!!")
-            return avg_t_delta
-    print("No steps detected!")            
-    return 0
+        else:
+            print("No steps!")            
+    
 
 def plotFFT():
     global dfft_buffer
