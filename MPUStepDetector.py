@@ -7,6 +7,7 @@ from threading import Thread
 from threading import Event
 import matplotlib.pyplot as plt
 import datetime
+import math
 
 ###SETTINGS###
 SENSORAXIS = 2
@@ -15,6 +16,7 @@ FILTER_INVALIDZONE = 150
 FILTER_MIN = 20 # Hz
 SAMPLERATE = 500 # Hz
 
+THRESHHOLD_SCALER=0.5
 PEAKTHRESHHOLD = 300 # raw
 SETTLEMAX = 500 # raw
 NLARGEST = 100 # count
@@ -43,6 +45,7 @@ class MPUStepDetector():
     calibration_rms = 15250
     calibration_center = 20
     calibration_threshhold = PEAKTHRESHHOLD
+    calibration_level_1m = 0
     stopEvent = Event()
     enableFilter=True
     last=datetime.datetime.now()
@@ -130,6 +133,13 @@ class MPUStepDetector():
                         self.sen1.reset_fifo()
                         return
                     print(time.time(),"::STEP!")
+
+                    distance = 0
+                    faktor = ((buffer[idx2]+buffer[idx])/2) / self.calibration_level_1m
+                    if(faktor > 1): # farther than 1m
+                        distance = 3/math.sqrt(faktor)
+                    print(distance)
+
                     self.invalidRange=idx2
                     #plt.plot(x_data,self.buffer)
                     #plt.show()
@@ -176,7 +186,7 @@ class MPUStepDetector():
         
 
     def calibrate_Steps(self,rms,rmsPeaks):
-        print("calibrating center frequency - walk around (at least 5 steps)")
+        print("calibrating center frequency - walk around at 1m distance to the sensor(at least 5 steps)")
         data = []
         b, a = scipy.signal.iirnotch(NOTCHFREQ,QUALITYFACTOR,SAMPLERATE)
         #scipy.signal.butter(3, 48/(SAMPLERATE/2), btype='low')
@@ -208,16 +218,16 @@ class MPUStepDetector():
         sorted_indices = np.argsort(buf)
         sorted_data = buf[sorted_indices]
         mean_max = np.mean(sorted_data[-NLARGEST : ])
-        threshhold = (mean_max + (rmsPeaks-rms))/2
+        threshhold = (mean_max + (rmsPeaks-rms))/2#(1-THRESHHOLD_SCALER)*mean_max + THRESHHOLD_SCALER*(rmsPeaks-rms)
         #threshhold currently is between max noise and mean of peaks
         print(threshhold)
         print(centerFreq)
-        return centerFreq,threshhold
+        return centerFreq,threshhold,(rmsPeaks-rms)
 
 
     def calibrate(self):
         self.calibration_rms,rmsPeaks = self.calibrate_still()
-        self.calibration_center,self.calibration_threshhold = self.calibrate_Steps(self.calibration_rms,rmsPeaks)
+        self.calibration_center,self.calibration_threshhold,self.calibration_level_1m = self.calibrate_Steps(self.calibration_rms,rmsPeaks)
         print("threshhold: ",self.calibration_threshhold)
         if(self.enableFilter):
             self.setFilterParameters(self.calibration_center,3)
@@ -261,7 +271,7 @@ if __name__ == "__main__":
     global sd 
     sd = MPUStepDetector(0x68)
     sd.setCallback(test)
-    #sd.calibrate()
+    sd.calibrate()
     sd.setFilterParameters(11,3)
     sd.enableFilter(False)
     sd.runner()
