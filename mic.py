@@ -2,7 +2,7 @@ from microphone import microphoneDetector
 import time
 
 def testCallback(timeDelta):
-    print("Time deltas: ", timeDelta)
+    print("Time deltas in Callback: ", timeDelta)
 
 mic1 = microphoneDetector()
 mic1.startAsync()

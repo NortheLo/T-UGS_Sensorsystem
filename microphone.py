@@ -18,12 +18,12 @@ RATE = 44100
 CHUNK = 2048
 PERIOD = CHUNK * 1/RATE * 1e3 # Time in ms between samplepoints
 FIFO_WINDOW = 32
-THRESHOLD_COEFF = 1.15
+THRESHOLD_COEFF = 0.85 
 MAX_STEP_TIME = 1300
 MIN_STEP_TIME = 300
 BANDPASS_FRQ = [10, 900]
 BANDSTOP_FRQ = [50, 600]
-FRQ_OF_INTEREST = [2, 75] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply; 20Hz is interesting aswell as 400Hz;
+FRQ_OF_INTEREST = [2] # Each frequency bin has a bw of 10.7hz (44.1kHz/2) / 2048 (nb of bins of the fft); So index multiply; 20Hz is interesting aswell as 400Hz;
                           # The higher frequencies seem to be more interesting to find out the hardness of the materials of the shoes and ground
 
 class microphoneDetector():
@@ -65,10 +65,11 @@ class microphoneDetector():
                             stream_callback=self.callbackNonFiltered)
             self.new_data = False
             self.stream.start_stream()
+            print("Calibrating...\nPlease be silent")
             while True:
-                time.sleep((FIFO_WINDOW*PERIOD)/1e3)
+                time.sleep(5)
                 break
-            print("Calc the threshold based on the noise and input level")
+            print("Calibration ended!\nCalc the threshold based on the noise and input level")
             self.calcThreshold()
             self.closeAudio()
 
@@ -90,7 +91,7 @@ class microphoneDetector():
 
         dfft_calib = 20* np.log10(np.abs(scipy.fftpack.fft(audio_data)))
         self.calib_buffer[0].append(dfft_calib[FRQ_OF_INTEREST[0]])
-        self.calib_buffer[1].append(dfft_calib[FRQ_OF_INTEREST[1]])
+        #self.calib_buffer[1].append(dfft_calib[FRQ_OF_INTEREST[1]])
 
         #print(dfft_calib)
         return (in_data, pyaudio.paContinue)
@@ -127,12 +128,12 @@ class microphoneDetector():
             max_frq[i] = np.amax(self.calib_buffer[i])
             avg_frq[i] = np.average(self.calib_buffer[i])
 
-
         for j in range(len(self.threshold)):
             self.threshold[j] = avg_frq[j] * THRESHOLD_COEFF
-
+        
+        #self.threshold[0] = 80
         print("Freq: " + str(FRQ_OF_INTEREST[0]*10) + "Hz    Max: " + str(max_frq[0]) + "    Avg: " + str(avg_frq[0]) + "    Threshold: " + str(self.threshold[0]))
-        print("Freq: " + str(FRQ_OF_INTEREST[1]*10) + "Hz    Max: " + str(max_frq[1]) + "    Avg: " + str(avg_frq[1]) + "    Threshold: " + str(self.threshold[1]))
+        #print("Freq: " + str(FRQ_OF_INTEREST[1]*10) + "Hz    Max: " + str(max_frq[1]) + "    Avg: " + str(avg_frq[1]) + "    Threshold: " + str(self.threshold[1]))
 
 
     def intoFifo(self):
@@ -152,27 +153,21 @@ class microphoneDetector():
 
                 # For seeing the values in the 20Hz bin in the FIFO
                 print("FIFO at 20Hz ", self.fifo[2, :])
+                #print("FIFO at 400Hz ", self.fifo[75, :])
                 self.stepTimedelta()
 
     def stepTimedelta(self):
-        #time_delta = np.zeros((len(FRQ_OF_INTEREST), FIFO_WINDOW))
         for i in range(len(FRQ_OF_INTEREST)):
-            print("Observing freq: " + str(FRQ_OF_INTEREST[i]*10) + "Hz")
-            freqbins_over_time = self.fifo[i, :]
+            #print("Observing freq: " + str(FRQ_OF_INTEREST[i]*10) + "Hz")
+            freqbins_over_time = self.fifo[FRQ_OF_INTEREST[i], :]
             idx = np.where(freqbins_over_time > self.threshold[i])
-            print("idx %s" % idx)
+            #print("idx %s" % idx)
             time_deltas = PERIOD * np.diff(idx)
             print("Step time deltas: \n%s" % time_deltas)
-            #time_delta[i, :] = time_deltas
-            self.callback(time_deltas)
-
-        
-
-            #avg_t_delta = np.average(time_deltas)
-            #if (avg_t_delta > MIN_STEP_TIME) and (avg_t_delta < MAX_STEP_TIME):
-            #    print("Steps detected!!!")
-            #else:
-            #    print("No steps!")
+            
+            for j in time_deltas[0]:
+                if j < MAX_STEP_TIME and j > MIN_STEP_TIME:
+                    self.callback(j)
 
     def closeAudio(self):
             self.stream.stop_stream()
