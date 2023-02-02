@@ -36,9 +36,9 @@ class microphoneDetector():
     enableFilter = False
     threshold = 1500
      
-    def __init__(self):
-        #self.calibrate()
-
+    def __init__(self, filter=False):
+        self.enableFilter = filter
+       
         # start recording
         self.stream = self.audio.open(format=FORMAT,
                         channels=CHANNELS,
@@ -76,21 +76,27 @@ class microphoneDetector():
         self.audio_data = audio_data
         self.new_data = True
         self.lock.release()
+        #print(audio_data)
        
         return (in_data, pyaudio.paContinue)
 
     def setThreshold(self, buffer):
         # Setting the THRESHOLD above a noise corridor the average
 
-        #peak = np.amax(buffer)
-        avg = np.average(buffer)
-        self.threshold = avg 
+        peak = np.amax(np.absolute(buffer))
+        avg = np.average(np.absolute(buffer))
+        self.threshold = self.getRMS(buffer)
         
-        #print("Max: " + str(peak) +
-        print("    Avg: " + str(avg) + "    Threshold: " + str(self.threshold))
+        print("Max: " + str(peak) + "    Avg: " + str(avg) + "    Threshold: " + str(self.threshold))
+
+    def getRMS(self, buffer):
+        rms = np.sqrt(np.mean(np.square(buffer))) 
+        return rms
 
     def intoFifo(self):
-        if self.new_data == True:
+        if self.new_data == False:
+            return False
+        else:
             self.fifo = np.roll(self.fifo, CHUNK//RESMPL_FACTOR)
             idx = 0
             self.lock.acquire()
@@ -99,8 +105,7 @@ class microphoneDetector():
                 idx += 1
             self.new_data = False
             self.lock.release()
-
-            self.stepTimedelta(np.absolute(self.fifo))
+            return True
     
     def delFifo(self, startingIndex=0):
         for i in range(startingIndex, len(self.fifo)):
@@ -108,16 +113,30 @@ class microphoneDetector():
 
     def stepTimedelta(self, buffer):
         idx_Peak = np.where(buffer > self.threshold)[0]
+        idx_time = np.diff(idx_Peak) * DELTA_TIME_SAMPLE
+        if len(idx_time) != 0: 
+            max_time = np.amax(idx_time)
+            if max_time < MAX_STEP_TIME and max_time > MIN_STEP_TIME:
+                self.callback(max_time) 
+                self.delFifo()
 
-        for idx in idx_Peak:
-            for idy in idx_Peak:
-                time_delta = (idy - idx) * DELTA_TIME_SAMPLE
-                print(time_delta)
-                if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
-                    self.callback(time_delta)
-                    self.delFifo(idx)
+       # for idx in idx_Peak:
+       #     for idy in idx_Peak:
+       #         time_delta = (idy - idx) * DELTA_TIME_SAMPLE
+       #         #print(time_delta)
+       #         if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
+       #             self.callback(time_delta)
+       #             #self.delFifo(idx)
                     
-        
+    def calibrate(self):
+        print("Calibration\nPlease make some steps!")
+        i = 0
+        while (i  < 30) and (not self.stopEvent.is_set()):
+            if self.intoFifo():
+                i += 1
+        self.setThreshold(self.fifo)    
+        self.delFifo()        
+
     def closeAudio(self):
             self.stream.stop_stream()
             self.stream.close()
@@ -133,22 +152,14 @@ class microphoneDetector():
             self.callback = callback
 
     def runner(self):
-        buffer = []
-        print("Calibration\nPlease dont make any noises!")
-        
-       #i = 0
-       #while i  < 5:
-       #    if self.new_data == True:
-       #        buffer += self.audio_data
-       #    i += 1
-       #self.setThreshold(buffer)    
+        self.calibrate()
 
         print ("\n+---------------------------------+")
         print ("| Press Ctrl+C to Break Recording |")
         print ("+---------------------------------+\n")
 
         while (not self.stopEvent.is_set()):
-            self.intoFifo()
-            
+            if self.intoFifo():
+                self.stepTimedelta(np.absolute(self.fifo))
         self.closeAudio()
 
