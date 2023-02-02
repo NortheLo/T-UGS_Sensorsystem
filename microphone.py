@@ -16,11 +16,11 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 CHUNK = 2048
-MAX_STEP_TIME = 1300
-MIN_STEP_TIME = 300
+MAX_STEP_TIME = 1.3
+MIN_STEP_TIME = 0.3
 LP_FRQ = 50
-DELTA_TIME_SAMPLE = 1/RATE
 RESMPL_FACTOR = 8
+DELTA_TIME_SAMPLE = 1/(RATE//RESMPL_FACTOR)
 
 class microphoneDetector():
     audio = pyaudio.PyAudio()
@@ -34,7 +34,7 @@ class microphoneDetector():
     audio_data = None
     fifo = np.zeros(int((CHUNK/RESMPL_FACTOR)*30))
     enableFilter = False
-    threshold = 500
+    threshold = 1500
      
     def __init__(self):
         #self.calibrate()
@@ -101,38 +101,23 @@ class microphoneDetector():
             self.lock.release()
 
             self.stepTimedelta(np.absolute(self.fifo))
-                
-
-    def deleteFifoSection(self, buffer, index):
-        section = index // (CHUNK/8)
-         
-        for i in range(section, section+(CHUNK//RESMPL_FACTOR), 1):
-            buffer[i] = 0
+    
+    def delFifo(self, startingIndex=0):
+        for i in range(startingIndex, len(self.fifo)):
+            self.fifo[i] = 0
 
     def stepTimedelta(self, buffer):
         idx_Peak = np.where(buffer > self.threshold)[0]
-        #time_deltas = np.diff(idx)
-        #print("Time deltas:", time_deltas)
-      
+
         for idx in idx_Peak:
             for idy in idx_Peak:
-                time_delta = (idx - idy) * DELTA_TIME_SAMPLE
-
+                time_delta = (idy - idx) * DELTA_TIME_SAMPLE
+                print(time_delta)
                 if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
-                    print("Step ", time_delta)
-      
-       # for i in range(len(FRQ_OF_INTEREST)):
-       #     #print("Observing freq: " + str(FRQ_OF_INTEREST[i]*10) + "Hz")
-       #     freqbins_over_time = self.fifo[FRQ_OF_INTEREST[i], :]
-       #     idx = np.where(freqbins_over_time > self.threshold[i])
-       #     #print("idx %s" % idx)
-       #     time_deltas = PERIOD * np.diff(idx)
-       #     print("Step time deltas: \n%s" % time_deltas)
-       #     
-       #     for j in time_deltas[0]:
-       #         if j < MAX_STEP_TIME and j > MIN_STEP_TIME:
-       #             self.callback(j)
-
+                    self.callback(time_delta)
+                    self.delFifo(idx)
+                    
+        
     def closeAudio(self):
             self.stream.stop_stream()
             self.stream.close()
