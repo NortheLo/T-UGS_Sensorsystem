@@ -17,11 +17,11 @@ CHANNELS = 1
 RATE = 44100
 CHUNK = 2048
 MAX_STEP_TIME = 1.3
-MIN_STEP_TIME = 0.3
+MIN_STEP_TIME = 0.35
 LP_FRQ = 50
 RESMPL_FACTOR = 8
 DELTA_TIME_SAMPLE = 1/(RATE//RESMPL_FACTOR)
-
+EVENT_DURATION = 0.3
 class microphoneDetector():
     audio = pyaudio.PyAudio()
     lock = threading.Lock()
@@ -35,6 +35,7 @@ class microphoneDetector():
     enableFilter = False
     threshold = 1500
     sos_lp = None
+    test=0
 
     def __init__(self, filter=False):
         self.enableFilter = filter
@@ -46,7 +47,7 @@ class microphoneDetector():
         self.stream = self.audio.open(format=FORMAT,
                         channels=CHANNELS,
                         rate=RATE,
-                        input=self.selectMic(),
+                        input=1,
                         frames_per_buffer=CHUNK,
                         stream_callback=self.callbackAudio)
 
@@ -64,7 +65,7 @@ class microphoneDetector():
                  print("Input Device id ", i, " - ", p.get_device_info_by_host_api_device_index(0, i).get('name'))
 
         print("Select microphone by id: ")
-        self.device = int(input())
+        self.device = 1#int(input())
         return self.device
 
     def callbackAudio(self, in_data, frame_count, time_info, flag):
@@ -85,7 +86,7 @@ class microphoneDetector():
     def calibrate(self):
         print("Calibration\nPlease make some steps!")
         i = 0
-        while (i  < 30) and (not self.stopEvent.is_set()):
+        while (i  < 100) and (not self.stopEvent.is_set()):
             if self.intoFifo():
                 i += 1
         self.setThreshold(self.fifo)    
@@ -96,7 +97,7 @@ class microphoneDetector():
 
         peak = np.amax(np.absolute(buffer))
         avg = np.average(np.absolute(buffer))
-        self.threshold = self.getRMS(buffer) #~150-200 for steps when mic hole is pointing to the ground 
+        self.threshold = (self.getRMS(buffer)+peak) /2 #~150-200 for steps when mic hole is pointing to the ground 
         #self.threshold = 150 
         print("Max: " + str(peak) + "    Avg: " + str(avg) + "    Threshold: " + str(self.threshold))
 
@@ -108,10 +109,10 @@ class microphoneDetector():
         if self.new_data == False:
             return False
         else:
-            self.fifo = np.roll(self.fifo, CHUNK//RESMPL_FACTOR)
+            self.fifo = np.roll(self.fifo, CHUNK//(RESMPL_FACTOR-1))
             idx = 0
             self.lock.acquire()
-            for i in range(0, CHUNK, RESMPL_FACTOR):
+            for i in range(0, CHUNK, RESMPL_FACTOR-1):
                 self.fifo[idx] = self.audio_data[i]
                 idx += 1
             self.new_data = False
@@ -124,20 +125,32 @@ class microphoneDetector():
 
     def stepTimedelta(self, buffer):
         idx_Peak = np.where(buffer > self.threshold)[0]
-        idx_time = np.diff(idx_Peak) * DELTA_TIME_SAMPLE
-        if len(idx_time) != 0: 
-            max_time = np.amax(idx_time)
-            if max_time < MAX_STEP_TIME and max_time > MIN_STEP_TIME:
-                self.callback(max_time) 
-                self.delFifo()
+        
+        if(len(idx_Peak) == 0):
+            return
+        idx_time = (np.amax(idx_Peak)-np.amin(idx_Peak)) * DELTA_TIME_SAMPLE
+        if idx_time < MAX_STEP_TIME and idx_time > MIN_STEP_TIME:
+            self.callback(int(idx_time*1000))
+            x_data = range(0,len(buffer))
+            
 
-       # for idx in idx_Peak:
-       #     for idy in idx_Peak:
-       #         time_delta = (idy - idx) * DELTA_TIME_SAMPLE
-       #         #print(time_delta)
-       #         if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
-       #             self.callback(time_delta)
-       #             #self.delFifo(idx)
+            #plt.plot(x_data,buffer)
+            #plt.show()
+            self.delFifo(np.amax(idx_Peak)-int(EVENT_DURATION/DELTA_TIME_SAMPLE))
+            #plt.plot(x_data,self.fifo)
+            #plt.show()
+
+        # for idx in idx_Peak:
+        #    for idy in idx_Peak:
+        #         time_delta = (idy - idx) * DELTA_TIME_SAMPLE
+        #         #print(time_delta)
+        #         if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
+        #             if self.getRMS(self.fifo[idy:idx]) > self.threshold:
+        #                 break
+
+        #             self.callback(time_delta)
+        #             self.delFifo(idy-int(EVENT_DURATION/DELTA_TIME_SAMPLE))
+        #             return
 
     def closeAudio(self):
             self.stream.stop_stream()
@@ -154,7 +167,7 @@ class microphoneDetector():
             self.callback = callback
 
     def runner(self):
-        self.calibrate()
+        #self.calibrate()
 
         print ("\n+---------------------------------+")
         print ("| Press Ctrl+C to Break Recording |")
@@ -165,3 +178,16 @@ class microphoneDetector():
                 self.stepTimedelta(np.absolute(self.fifo))
         self.closeAudio()
 
+def micCallback(stepDuration): # callback function
+    print("mic with duration: ",stepDuration)
+
+if __name__ == "__main__":
+    micDetector = microphoneDetector(filter=True)
+    micDetector.setCallback(micCallback)
+    micDetector.calibrate()
+    micDetector.runner()
+    #micDetector.startAsync()
+
+    while(True):
+        time.sleep(60)
+    micDetector.stopAsync()
