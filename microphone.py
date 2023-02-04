@@ -24,7 +24,6 @@ DELTA_TIME_SAMPLE = 1/(RATE//RESMPL_FACTOR)
 
 class microphoneDetector():
     audio = pyaudio.PyAudio()
-    calib_buffer = [[], []]
     lock = threading.Lock()
     new_data = False
     stopEvent = Event()
@@ -35,10 +34,14 @@ class microphoneDetector():
     fifo = np.zeros(int((CHUNK/RESMPL_FACTOR)*30))
     enableFilter = False
     threshold = 1500
-     
+    sos_lp = None
+
     def __init__(self, filter=False):
         self.enableFilter = filter
        
+        if(self.enableFilter):
+            self.sos_lp = signal.butter(10, LP_FRQ, 'lp', fs=RATE, output='sos')
+
         # start recording
         self.stream = self.audio.open(format=FORMAT,
                         channels=CHANNELS,
@@ -69,8 +72,7 @@ class microphoneDetector():
         audio_data = np.frombuffer(in_data, dtype=np.int16)
 
         if(self.enableFilter):
-            sos_bp = signal.butter(10, LP_FRQ, 'lp', fs=RATE, output='sos')
-            audio_data = signal.sosfilt(sos_bp, audio_data)
+            audio_data = signal.sosfilt(self.sos_lp, audio_data)
         
         self.lock.acquire()
         self.audio_data = audio_data
@@ -80,13 +82,22 @@ class microphoneDetector():
        
         return (in_data, pyaudio.paContinue)
 
+    def calibrate(self):
+        print("Calibration\nPlease make some steps!")
+        i = 0
+        while (i  < 30) and (not self.stopEvent.is_set()):
+            if self.intoFifo():
+                i += 1
+        self.setThreshold(self.fifo)    
+        self.delFifo()        
+    
     def setThreshold(self, buffer):
         # Setting the THRESHOLD above a noise corridor the average
 
         peak = np.amax(np.absolute(buffer))
         avg = np.average(np.absolute(buffer))
-        self.threshold = self.getRMS(buffer)
-        
+        self.threshold = self.getRMS(buffer) #~150-200 for steps when mic hole is pointing to the ground 
+        #self.threshold = 150 
         print("Max: " + str(peak) + "    Avg: " + str(avg) + "    Threshold: " + str(self.threshold))
 
     def getRMS(self, buffer):
@@ -127,15 +138,6 @@ class microphoneDetector():
        #         if time_delta < MAX_STEP_TIME and time_delta > MIN_STEP_TIME:
        #             self.callback(time_delta)
        #             #self.delFifo(idx)
-                    
-    def calibrate(self):
-        print("Calibration\nPlease make some steps!")
-        i = 0
-        while (i  < 30) and (not self.stopEvent.is_set()):
-            if self.intoFifo():
-                i += 1
-        self.setThreshold(self.fifo)    
-        self.delFifo()        
 
     def closeAudio(self):
             self.stream.stop_stream()
