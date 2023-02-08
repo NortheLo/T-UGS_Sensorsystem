@@ -109,10 +109,10 @@ class microphoneDetector():
         if self.new_data == False:
             return False
         else:
-            self.fifo = np.roll(self.fifo, CHUNK//(RESMPL_FACTOR-1))
+            self.fifo = np.roll(self.fifo, CHUNK//(RESMPL_FACTOR))
             idx = 0
             self.lock.acquire()
-            for i in range(0, CHUNK, RESMPL_FACTOR-1):
+            for i in range(0, CHUNK, RESMPL_FACTOR):
                 self.fifo[idx] = self.audio_data[i]
                 idx += 1
             self.new_data = False

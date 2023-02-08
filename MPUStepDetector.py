@@ -109,7 +109,7 @@ class MPUStepDetector():
         #print(len(data))
         if(len(data) < 50):
             return
-
+	
         if(self.enableFilter):
             window = scipy.signal.windows.tukey(len(data_calibrated))
             data_windowed = data_calibrated * window
@@ -132,23 +132,25 @@ class MPUStepDetector():
                         self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME)+FILTER_INVALIDZONE)
                         self.sen1.reset_fifo()
                         return
-                    print(time.time(),"::STEP!")
+                    
 
                     distance = 0
                     faktor = ((buffer[idx2]+buffer[idx])/2) / self.calibration_level_1m
                     if(faktor > 1): # farther than 1m
                         distance = 3/math.sqrt(faktor)
-                    print(distance)
+                    #print(distance)
 
                     self.invalidRange=idx2
+                    x_data = range(0,len(self.buffer))
                     #plt.plot(x_data,self.buffer)
                     #plt.show()
                     self.deleteWindow(self.buffer,idx2+int(EVENTDURATION/SAMPLETIME)+FILTER_INVALIDZONE)
                     x_data = range(0,len(self.buffer))
                     #plt.plot(x_data,self.buffer)
                     #plt.show()
+                    print(int(stepDuration),"::STEP!")
                     if(self.callback != None):
-                        self.callback(stepDuration)
+                        self.callback(int(stepDuration))
                     self.sen1.reset_fifo()
                     return
 
@@ -157,7 +159,8 @@ class MPUStepDetector():
 
 
     def setFilterParameters(self,centerFreq,order):
-        self.filtB, self.filtA = scipy.signal.butter(order, centerFreq/(SAMPLERATE/2), btype='low')
+        #self.filtB, self.filtA = scipy.signal.butter(order, centerFreq/(SAMPLERATE/2), btype='low')
+        self.filtB, self.filtA = scipy.signal.butter(3, [centerFreq-20, centerFreq+20],fs=SAMPLERATE, btype='band')
 
     def fftCalc(self,buffer):
         N = len(buffer)
@@ -240,6 +243,7 @@ class MPUStepDetector():
         self.enableFilter=status
 
     def runner(self):
+        print("starting")
         while(not self.stopEvent.is_set()):
             self.detector(self.calibration_rms,self.calibration_threshhold)
             time.sleep(LOOPDELAY)
@@ -272,8 +276,8 @@ if __name__ == "__main__":
     sd = MPUStepDetector(0x68)
     sd.setCallback(test)
     sd.calibrate()
-    sd.setFilterParameters(11,3)
-    sd.enableFilter(False)
+    #sd.setFilterParameters(11,3)
+    sd.enableFilter(True)
     sd.runner()
     while(True):
         time.sleep(1)
