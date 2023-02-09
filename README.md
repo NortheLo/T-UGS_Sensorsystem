@@ -6,6 +6,6 @@ Als erstes muss die Hardware gemäß folgendem Bild angeschlossen werden:
 
 ## 2.Schritt
 Als nächstes muss das Projekt auf dem Raspberry entpackt werden.
-Ausserdem muss unser Fork der MPU Bibliothek als submodul mittels dem befehl ``git submodule init`` initialisiert werden. 
+Ausserdem muss unser Fork der MPU Bibliothek als submodul mittels dem Befehl ``git submodule init`` initialisiert werden. 
 Sind diese beiden Dinge erledigt, müssen zuletzt noch die Bibliotheken installiert werden, dies geschieht durch ausführen des Skripts „Dependencies.sh“.
 Jetzt kann das Skript mit ``python T-UGS.py`` gestartet werden, um den Detektor zu starten.
